@@ -4,7 +4,7 @@ Solar-powered IoT parking spot monitor built for UTSA. An ESP32 reads an HC-SR04
 ultrasonic rangefinder, pushes occupancy + telemetry to Firebase Realtime Database,
 and a live dashboard renders it in real time. Includes a simulated full-lot demo view.
 
-**Live demo:** _add your GitHub Pages link here once it's live_
+**Live demo:** [bashthaman.github.io/SpotSense](https://bashthaman.github.io/SpotSense/)
 
 ## Hardware
 
