@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpotSense — Live Parking Telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 28 L14 12 L20 20 L26 8 L36 28" stroke="var(--orange)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="20" cy="20" r="2.5" fill="var(--orange)"/>
+    </svg>
+    <div class="brand-text">
+      <h1>SpotSense</h1>
+      <span>Ultrasonic Parking Telemetry &middot; UTSA</span>
+    </div>
+  </div>
+  <div class="conn-status" id="connStatus">
+    <span class="dot" id="connDot"></span>
+    <span id="connLabel">Connecting&hellip;</span>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <a href="parking.html" class="tab-link active">Live Sensor</a>
+  <a href="lot-demo.html" class="tab-link">Lot Demo</a>
+</nav>
+
+<main class="dashboard">
+
+  <!-- HERO: primary spot with sonar sweep -->
+  <section class="hero-card" id="heroCard">
+    <div class="hero-left">
+      <span class="eyebrow">Spot</span>
+      <h2 class="spot-id" id="spotId">A1</h2>
+      <div class="sonar" id="sonar">
+        <span class="ring r1"></span>
+        <span class="ring r2"></span>
+        <span class="ring r3"></span>
+        <div class="sensor-core"></div>
+      </div>
+      <p class="hero-caption">HC-SR04 ultrasonic rangefinder &middot; 5s polling interval</p>
+    </div>
+    <div class="hero-right">
+      <div class="status-pill" id="statusPill">
+        <span id="statusText">VACANT</span>
+      </div>
+      <dl class="hero-stats">
+        <div>
+          <dt>Distance</dt>
+          <dd id="distanceVal">— cm</dd>
+        </div>
+        <div>
+          <dt>Last update</dt>
+          <dd id="lastUpdate">—</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- TELEMETRY GRID -->
+  <section class="telemetry-grid">
+
+    <article class="tele-card">
+      <div class="tele-head">
+        <span class="tele-label">Battery</span>
+        <span class="tele-icon">⚡</span>
+      </div>
+      <div class="tele-value" id="batteryVoltage">— V</div>
+      <div class="battery-bar-track">
+        <div class="battery-bar-fill" id="batteryBar" style="width:0%"></div>
+      </div>
+      <span class="tele-sub" id="batteryPct">— %</span>
+    </article>
+
+    <article class="tele-card">
+      <div class="tele-head">
+        <span class="tele-label">Solar Input</span>
+        <span class="tele-icon">☀</span>
+      </div>
+      <div class="tele-value" id="chargingState">—</div>
+      <span class="tele-sub" id="chargingSub">Waiting on panel data</span>
+    </article>
+
+    <article class="tele-card">
+      <div class="tele-head">
+        <span class="tele-label">Signal Strength</span>
+        <span class="tele-icon">▲</span>
+      </div>
+      <div class="tele-value" id="rssiVal">— dBm</div>
+      <span class="tele-sub" id="rssiSub">ESP32 Wi‑Fi link</span>
+    </article>
+
+    <article class="tele-card">
+      <div class="tele-head">
+        <span class="tele-label">Uptime</span>
+        <span class="tele-icon">◷</span>
+      </div>
+      <div class="tele-value" id="uptimeVal">—</div>
+      <span class="tele-sub">Since last device boot</span>
+    </article>
+
+  </section>
+
+  <!-- ACTIVITY LOG -->
+  <section class="log-card">
+    <div class="log-head">
+      <h3>Activity Log</h3>
+      <span class="log-sub">Most recent state changes</span>
+    </div>
+    <ul class="log-list" id="logList">
+      <li class="log-empty" id="logEmpty">No transitions recorded yet — occupancy changes will appear here.</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>SpotSense &mdash; ESP32 &middot; HC-SR04 &middot; Firebase Realtime DB &middot; Solar + LiPo</span>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

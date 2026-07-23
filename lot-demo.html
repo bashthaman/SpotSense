@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpotSense — Lot Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 28 L14 12 L20 20 L26 8 L36 28" stroke="var(--orange)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="20" cy="20" r="2.5" fill="var(--orange)"/>
+    </svg>
+    <div class="brand-text">
+      <h1>SpotSense</h1>
+      <span>Ultrasonic Parking Telemetry &middot; UTSA</span>
+    </div>
+  </div>
+  <div class="conn-status">
+    <span class="dot online"></span>
+    <span>Demo Mode</span>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <a href="parking.html" class="tab-link">Live Sensor</a>
+  <a href="lot-demo.html" class="tab-link active">Lot Demo</a>
+</nav>
+
+<main>
+
+  <section class="lot-hero">
+    <div class="lot-hero-title">
+      <h2>myUTSAParking &mdash; Brackenridge Ave Lot 1</h2>
+      <p>Simulated top-down preview of a full lot deployment</p>
+    </div>
+    <dl class="lot-stat-cluster">
+      <div class="lot-stat">
+        <dt>Occupied</dt>
+        <dd class="occupied-count" id="occupiedCount">—</dd>
+      </div>
+      <div class="lot-stat">
+        <dt>Vacant</dt>
+        <dd class="vacant-count" id="vacantCount">—</dd>
+      </div>
+      <div class="lot-stat">
+        <dt>Utilization</dt>
+        <dd id="utilPct">—</dd>
+      </div>
+    </dl>
+  </section>
+
+  <div class="lot-legend">
+    <span><span class="swatch vacant"></span>Vacant</span>
+    <span><span class="swatch occupied"></span>Occupied</span>
+    <span class="disclaimer">Simulated data &mdash; not connected to live sensors</span>
+  </div>
+
+  <section class="lot-field" id="lotField" aria-label="Simulated parking lot occupancy grid">
+    <!-- rows injected by lot-demo.js -->
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>Demo view &mdash; illustrates what SpotSense looks like scaled across a full lot</span>
+</footer>
+
+<script src="lot-demo.js"></script>
+</body>
+</html>
