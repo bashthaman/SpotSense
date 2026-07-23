@@ -5,7 +5,39 @@ ultrasonic rangefinder, pushes occupancy + telemetry to Firebase Realtime Databa
 and a live dashboard renders it in real time. Includes a simulated full-lot demo view.
 
 **Live demo:** [bashthaman.github.io/SpotSense](https://bashthaman.github.io/SpotSense/)
+## Why This Project Exists
 
+Anyone who's circled UTSA'S commuter lots during during the peak hours knows the
+problem: dozens of open spots exist somewhere in the lot, but there's no way
+to see where without driving every row yourself. UTSA's commuter population
+is huge, parking supply is tight during peak hours, and the only real-time
+information available to a driver is what they can see through the
+windshield.
+
+That "circling" isn't just an inconvenience, it's measurable waste.
+Research on this problem goes back decades, and estimates vary by location
+and method, but a 2023 Federal Highway Administration study using GPS
+data found that cruising for a parking spot accounts for close to 10% of
+urban traffic during peak hours, with older intercept-survey studies in
+dense downtown areas finding figures as high as 30-70% depending on how
+crowded the area is. Every minute spent circling is a minute of unnecessary
+idling, fuel burned, and emissions released for a trip that's already
+finished except for the parking itself.
+
+SpotSense is a small-scale attempt at closing that information gap: a
+low-cost, solar-powered sensor that reports whether a single spot is
+occupied in real time, instead of asking a driver to guess. It's built and
+tested on one spot at UTSA right now, but the approach doesn't require
+university-specific infrastructure — the same ESP32 + ultrasonic sensor +
+Firebase pattern could scale to a parking garage, a hospital lot, a
+downtown block, or any space where drivers currently have to search
+blind.
+
+This isn't a claim that one sensor solves campus parking. It's a working
+proof of concept for a cheap, deployable piece of infrastructure that
+could be part of that solution and a demonstration that I can take a real,
+observable problem and build something that actually works against it,
+not just describe it.
 ## Hardware
 
 | Component | Purpose |
