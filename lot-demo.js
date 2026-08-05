@@ -10,22 +10,51 @@ const field = document.getElementById('lotField');
 const occupiedCountEl = document.getElementById('occupiedCount');
 const vacantCountEl = document.getElementById('vacantCount');
 const utilPctEl = document.getElementById('utilPct');
+const toastContainer = document.getElementById('toastContainer');
 
 const spots = [];
 
-ROW_COUNTS.forEach((count) => {
+ROW_COUNTS.forEach((count, rowIndex) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'lot-row-wrap';
+
+  const label = document.createElement('span');
+  label.className = 'row-label';
+  label.textContent = `Row ${rowIndex + 1}`;
+  wrap.appendChild(label);
+
   const row = document.createElement('div');
   row.className = 'lot-row';
   for (let i = 0; i < count; i++) {
     const spot = document.createElement('div');
     spot.className = 'lot-spot';
+    spot.dataset.row = rowIndex;
     const occupied = Math.random() < INITIAL_OCCUPANCY;
     if (occupied) spot.classList.add('occupied');
     row.appendChild(spot);
     spots.push(spot);
   }
-  field.appendChild(row);
+  wrap.appendChild(row);
+  field.appendChild(wrap);
 });
+
+// Snapshot of vacant-count-per-row, used to detect newly-opened spots
+function vacantCountsByRow() {
+  const counts = new Array(ROW_COUNTS.length).fill(0);
+  spots.forEach((s) => {
+    if (!s.classList.contains('occupied')) counts[Number(s.dataset.row)]++;
+  });
+  return counts;
+}
+let lastVacantByRow = vacantCountsByRow();
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
 
 function updateStats() {
   const occupied = spots.filter((s) => s.classList.contains('occupied')).length;
@@ -47,6 +76,16 @@ function randomFlip() {
     setTimeout(() => spot.classList.remove('flash'), 600);
   }
   updateStats();
+
+  const nowVacantByRow = vacantCountsByRow();
+  nowVacantByRow.forEach((count, rowIndex) => {
+    const gained = count - lastVacantByRow[rowIndex];
+    if (gained > 0) {
+      const spotWord = gained === 1 ? 'spot' : 'spots';
+      showToast(`Row ${rowIndex + 1} has ${gained} ${spotWord} open`);
+    }
+  });
+  lastVacantByRow = nowVacantByRow;
 }
 
 updateStats();
