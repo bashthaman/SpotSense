@@ -1,10 +1,14 @@
 // lot-demo.js — simulated top-down lot view (no real sensor data).
 // Rough row layout inspired by Brackenridge Ave Lot 1's row count/density.
+// Every row has a driving aisle right below it, with a couple of cars
+// continuously moving through, plus cars that actually drive into/out of
+// a stall whenever that spot's occupancy flips.
 
 const ROW_COUNTS = [16, 19, 21, 22, 19, 15, 11];
 const FLIP_INTERVAL_MS = 2200;   // how often we pick spots to change state
 const FLIPS_PER_TICK = [1, 4];   // min/max spots flipped per tick
 const INITIAL_OCCUPANCY = 0.55;  // ~55% occupied at load, matches a busy lot
+const AMBIENT_CAR_COLORS = ['var(--cyan)', 'var(--amber)', 'var(--orange)'];
 
 const field = document.getElementById('lotField');
 const occupiedCountEl = document.getElementById('occupiedCount');
@@ -13,8 +17,10 @@ const utilPctEl = document.getElementById('utilPct');
 const toastContainer = document.getElementById('toastContainer');
 
 const spots = [];
+const aisleByRow = []; // aisle element sitting just below each row
 
 ROW_COUNTS.forEach((count, rowIndex) => {
+  // The row of stalls itself
   const wrap = document.createElement('div');
   wrap.className = 'lot-row-wrap';
 
@@ -36,6 +42,28 @@ ROW_COUNTS.forEach((count, rowIndex) => {
   }
   wrap.appendChild(row);
   field.appendChild(wrap);
+
+  // The driving aisle right below this row
+  const aisle = document.createElement('div');
+  aisle.className = 'lot-aisle';
+
+  // 1-2 ambient cars that continuously drive back and forth along it,
+  // just for a "this lot is alive" feel — not tied to any spot's state.
+  const carCount = 1 + Math.round(Math.random());
+  for (let c = 0; c < carCount; c++) {
+    const car = document.createElement('div');
+    car.className = 'aisle-car';
+    const goingRight = Math.random() < 0.5;
+    const duration = (6 + Math.random() * 5).toFixed(1);
+    const delay = (Math.random() * 6).toFixed(1);
+    car.style.background = AMBIENT_CAR_COLORS[Math.floor(Math.random() * AMBIENT_CAR_COLORS.length)];
+    car.style.animation = `${goingRight ? 'driveRight' : 'driveLeft'} ${duration}s linear infinite`;
+    car.style.animationDelay = `${delay}s`;
+    aisle.appendChild(car);
+  }
+
+  field.appendChild(aisle);
+  aisleByRow.push(aisle);
 });
 
 // Snapshot of vacant-count-per-row, used to detect newly-opened spots
@@ -56,42 +84,70 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 4000);
 }
 
-const roadEl = document.querySelector('.lot-road');
-
-// Animates a small car traveling between the road strip and a specific spot.
-// direction: 'enter' (road -> spot, car fades in as it "parks")
-//            'leave' (spot -> road, car fades out as it "drives off")
+// Drives a small car from the aisle straight into a stall (direction 'enter'),
+// or from a stall out into the aisle (direction 'leave'). Real positional
+// movement over two steps so it reads as driving, not a fade/blink.
 function travelCar(spot, direction) {
-  const roadRect = roadEl.getBoundingClientRect();
+  const rowIndex = Number(spot.dataset.row);
+  const aisle = aisleByRow[rowIndex];
+  const aisleRect = aisle.getBoundingClientRect();
   const spotRect = spot.getBoundingClientRect();
 
-  const roadX = roadRect.left + Math.random() * roadRect.width;
-  const roadY = roadRect.top + roadRect.height / 2;
   const spotX = spotRect.left + spotRect.width / 2;
   const spotY = spotRect.top + spotRect.height / 2;
+  const aisleY = aisleRect.top + aisleRect.height / 2;
+  // Point in the aisle directly below/above the stall's column
+  const alignedX = spotX;
+  // A point further down the aisle, so the car visibly drives along
+  // the lane before turning into the stall, rather than teleporting in
+  const approachX = spotX + (Math.random() < 0.5 ? -1 : 1) * (40 + Math.random() * 40);
 
   const car = document.createElement('div');
   car.className = 'traveling-car';
   document.body.appendChild(car);
 
-  const start = direction === 'enter' ? { x: roadX, y: roadY } : { x: spotX, y: spotY };
-  const end = direction === 'enter' ? { x: spotX, y: spotY } : { x: roadX, y: roadY };
+  if (direction === 'enter') {
+    // Start out in the aisle, a little ways down from the stall
+    car.style.transition = 'none';
+    car.style.left = `${approachX}px`;
+    car.style.top = `${aisleY}px`;
+    car.style.opacity = '1';
+    void car.offsetWidth; // force the browser to register the start position
 
-  car.style.left = `${start.x}px`;
-  car.style.top = `${start.y}px`;
-  car.style.opacity = '1';
+    // Leg 1: drive along the aisle to line up with the stall's column
+    car.style.transition = 'left 0.45s ease-in-out';
+    car.style.left = `${alignedX}px`;
 
-  // Force layout so the browser registers the start position before we animate
-  void car.offsetWidth;
+    setTimeout(() => {
+      // Leg 2: pull straight into the stall
+      car.style.transition = 'top 0.45s ease-in-out, opacity 0.25s ease 0.3s';
+      car.style.top = `${spotY}px`;
+      car.style.opacity = '0';
+    }, 460);
 
-  requestAnimationFrame(() => {
-    car.style.transition = 'left 0.9s ease, top 0.9s ease, opacity 0.9s ease 0.5s';
-    car.style.left = `${end.x}px`;
-    car.style.top = `${end.y}px`;
+    setTimeout(() => car.remove(), 950);
+  } else {
+    // Start parked in the stall
+    car.style.transition = 'none';
+    car.style.left = `${spotX}px`;
+    car.style.top = `${spotY}px`;
     car.style.opacity = '0';
-  });
+    void car.offsetWidth;
 
-  setTimeout(() => car.remove(), 1000);
+    // Leg 1: pull out of the stall into the aisle, fading in as it goes
+    car.style.transition = 'top 0.4s ease-in-out, opacity 0.25s ease';
+    car.style.top = `${aisleY}px`;
+    car.style.opacity = '1';
+
+    setTimeout(() => {
+      // Leg 2: drive off down the aisle
+      car.style.transition = 'left 0.5s ease-in-out, opacity 0.3s ease 0.25s';
+      car.style.left = `${approachX}px`;
+      car.style.opacity = '0';
+    }, 410);
+
+    setTimeout(() => car.remove(), 950);
+  }
 }
 
 function updateStats() {

@@ -230,19 +230,16 @@ body {
 }
 .lot-row-wrap:nth-child(even) .lot-row { margin-left: 24px; }
 
-/* ---------- Driving lane with animated cars ---------- */
-.lot-road {
-  max-width: 920px;
-  margin: 14px auto 0;
+/* ---------- Aisles: a driving lane sits between every row ---------- */
+.lot-aisle {
   position: relative;
-  z-index: 1;
-  height: 34px;
-  border-radius: 8px;
+  height: 22px;
+  margin-left: 56px; /* lines up under the row spots, past the row-label column */
+  border-radius: 4px;
   background: #0A1622;
-  border: 1px solid var(--line);
   overflow: hidden;
 }
-.lot-road::before {
+.lot-aisle::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -252,49 +249,42 @@ body {
   transform: translateY(-50%);
   background: repeating-linear-gradient(
     90deg,
-    var(--text-faint) 0px, var(--text-faint) 14px,
-    transparent 14px, transparent 26px
+    var(--text-faint) 0px, var(--text-faint) 10px,
+    transparent 10px, transparent 20px
   );
-  opacity: 0.4;
+  opacity: 0.35;
 }
-.lot-car {
+
+/* Ambient cars that continuously drive back and forth along an aisle */
+.aisle-car {
   position: absolute;
   top: 50%;
-  width: 30px;
-  height: 12px;
-  border-radius: 3px;
-  transform: translateY(-50%);
-  left: -40px;
-}
-.traveling-car {
-  position: fixed;
-  width: 14px;
+  width: 16px;
   height: 8px;
   border-radius: 2px;
+  transform: translateY(-50%);
+}
+@keyframes driveRight {
+  from { left: -20px; }
+  to { left: 100%; }
+}
+@keyframes driveLeft {
+  from { left: 100%; }
+  to { left: -20px; }
+}
+
+/* A car actively parking into or leaving a specific stall */
+.traveling-car {
+  position: fixed;
+  width: 15px;
+  height: 9px;
+  border-radius: 2px;
   background: var(--orange);
-  box-shadow: 0 0 6px rgba(241, 90, 34, 0.6);
+  box-shadow: 0 0 6px rgba(241, 90, 34, 0.55);
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 60;
-}
-.lot-car::after {
-  content: "";
-  position: absolute;
-  top: -3px;
-  left: 6px;
-  width: 14px;
-  height: 6px;
-  border-radius: 2px;
-  background: inherit;
-  opacity: 0.7;
-}
-.car-1 { background: var(--orange); animation: driveAcross 7s linear infinite; }
-.car-2 { background: var(--cyan); animation: driveAcross 9.5s linear infinite; animation-delay: 2s; }
-.car-3 { background: var(--amber); animation: driveAcross 6s linear infinite; animation-delay: 4.2s; }
-
-@keyframes driveAcross {
-  from { left: -40px; }
-  to { left: 100%; }
+  transition: left 0.85s ease-in-out, top 0.85s ease-in-out;
 }
 
 /* ---------- Toast notifications ---------- */
