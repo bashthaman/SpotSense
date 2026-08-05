@@ -56,6 +56,44 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 4000);
 }
 
+const roadEl = document.querySelector('.lot-road');
+
+// Animates a small car traveling between the road strip and a specific spot.
+// direction: 'enter' (road -> spot, car fades in as it "parks")
+//            'leave' (spot -> road, car fades out as it "drives off")
+function travelCar(spot, direction) {
+  const roadRect = roadEl.getBoundingClientRect();
+  const spotRect = spot.getBoundingClientRect();
+
+  const roadX = roadRect.left + Math.random() * roadRect.width;
+  const roadY = roadRect.top + roadRect.height / 2;
+  const spotX = spotRect.left + spotRect.width / 2;
+  const spotY = spotRect.top + spotRect.height / 2;
+
+  const car = document.createElement('div');
+  car.className = 'traveling-car';
+  document.body.appendChild(car);
+
+  const start = direction === 'enter' ? { x: roadX, y: roadY } : { x: spotX, y: spotY };
+  const end = direction === 'enter' ? { x: spotX, y: spotY } : { x: roadX, y: roadY };
+
+  car.style.left = `${start.x}px`;
+  car.style.top = `${start.y}px`;
+  car.style.opacity = '1';
+
+  // Force layout so the browser registers the start position before we animate
+  void car.offsetWidth;
+
+  requestAnimationFrame(() => {
+    car.style.transition = 'left 0.9s ease, top 0.9s ease, opacity 0.9s ease 0.5s';
+    car.style.left = `${end.x}px`;
+    car.style.top = `${end.y}px`;
+    car.style.opacity = '0';
+  });
+
+  setTimeout(() => car.remove(), 1000);
+}
+
 function updateStats() {
   const occupied = spots.filter((s) => s.classList.contains('occupied')).length;
   const total = spots.length;
@@ -74,6 +112,9 @@ function randomFlip() {
     spot.classList.toggle('occupied');
     spot.classList.add('flash');
     setTimeout(() => spot.classList.remove('flash'), 600);
+
+    const nowOccupied = spot.classList.contains('occupied');
+    travelCar(spot, nowOccupied ? 'enter' : 'leave');
   }
   updateStats();
 
