@@ -1,26 +1,31 @@
 // lot-demo.js — simulated top-down lot view (no real sensor data).
-// Rough row layout inspired by Brackenridge Ave Lot 1's row count/density.
-// Every row has a driving aisle right below it, with a couple of cars
-// continuously moving through, plus cars that actually drive into/out of
-// a stall whenever that spot's occupancy flips.
+// Rows + occupancy state live in the DOM (same as before). All car motion
+// is rendered on a canvas overlay, driven by requestAnimationFrame, so
+// cars move continuously frame-by-frame instead of jumping between two
+// CSS states — genuinely fluid, not a blink.
 
 const ROW_COUNTS = [16, 19, 21, 22, 19, 15, 11];
-const FLIP_INTERVAL_MS = 2200;   // how often we pick spots to change state
-const FLIPS_PER_TICK = [1, 4];   // min/max spots flipped per tick
-const INITIAL_OCCUPANCY = 0.55;  // ~55% occupied at load, matches a busy lot
-const AMBIENT_CAR_COLORS = ['var(--cyan)', 'var(--amber)', 'var(--orange)'];
+const FLIP_INTERVAL_MS = 2200;   // how often we pick spots to change occupancy
+const FLIPS_PER_TICK = [1, 4];
+const INITIAL_OCCUPANCY = 0.55;
+const AMBIENT_SPAWN_MS = 1100;   // how often a new through-traffic car appears
+const CAR_COLORS = ['#F15A22', '#1FD8C4', '#FFB627', '#E8432F'];
 
 const field = document.getElementById('lotField');
+const canvas = document.getElementById('trafficCanvas');
+const ctx = canvas.getContext('2d');
 const occupiedCountEl = document.getElementById('occupiedCount');
 const vacantCountEl = document.getElementById('vacantCount');
 const utilPctEl = document.getElementById('utilPct');
 const toastContainer = document.getElementById('toastContainer');
 
-const spots = [];
-const aisleByRow = []; // aisle element sitting just below each row
+const spots = [];       // spot DOM elements, index-aligned with spotLayout
+const spotLayout = [];  // { x, y, row } in field-local pixel coords
+const aisleEls = [];
+const aisleYs = [];     // aisle center-y per row, in field-local pixel coords
 
+// ---------- Build the grid (rows of stalls + an aisle under each row) ----------
 ROW_COUNTS.forEach((count, rowIndex) => {
-  // The row of stalls itself
   const wrap = document.createElement('div');
   wrap.className = 'lot-row-wrap';
 
@@ -35,38 +40,179 @@ ROW_COUNTS.forEach((count, rowIndex) => {
     const spot = document.createElement('div');
     spot.className = 'lot-spot';
     spot.dataset.row = rowIndex;
-    const occupied = Math.random() < INITIAL_OCCUPANCY;
-    if (occupied) spot.classList.add('occupied');
+    if (Math.random() < INITIAL_OCCUPANCY) spot.classList.add('occupied');
     row.appendChild(spot);
     spots.push(spot);
   }
   wrap.appendChild(row);
   field.appendChild(wrap);
 
-  // The driving aisle right below this row
   const aisle = document.createElement('div');
   aisle.className = 'lot-aisle';
-
-  // 1-2 ambient cars that continuously drive back and forth along it,
-  // just for a "this lot is alive" feel — not tied to any spot's state.
-  const carCount = 1 + Math.round(Math.random());
-  for (let c = 0; c < carCount; c++) {
-    const car = document.createElement('div');
-    car.className = 'aisle-car';
-    const goingRight = Math.random() < 0.5;
-    const duration = (6 + Math.random() * 5).toFixed(1);
-    const delay = (Math.random() * 6).toFixed(1);
-    car.style.background = AMBIENT_CAR_COLORS[Math.floor(Math.random() * AMBIENT_CAR_COLORS.length)];
-    car.style.animation = `${goingRight ? 'driveRight' : 'driveLeft'} ${duration}s linear infinite`;
-    car.style.animationDelay = `${delay}s`;
-    aisle.appendChild(car);
-  }
-
   field.appendChild(aisle);
-  aisleByRow.push(aisle);
+  aisleEls.push(aisle);
 });
 
-// Snapshot of vacant-count-per-row, used to detect newly-opened spots
+// ---------- Canvas sizing + coordinate layout ----------
+let fieldRect, canvasCssWidth, canvasCssHeight;
+
+function resizeCanvas() {
+  fieldRect = field.getBoundingClientRect();
+  canvasCssWidth = fieldRect.width;
+  canvasCssHeight = fieldRect.height;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvasCssWidth * dpr;
+  canvas.height = canvasCssHeight * dpr;
+  canvas.style.width = `${canvasCssWidth}px`;
+  canvas.style.height = `${canvasCssHeight}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function computeLayout() {
+  fieldRect = field.getBoundingClientRect();
+
+  aisleYs.length = 0;
+  aisleEls.forEach((aisle) => {
+    const r = aisle.getBoundingClientRect();
+    aisleYs.push(r.top + r.height / 2 - fieldRect.top);
+  });
+
+  spotLayout.length = 0;
+  spots.forEach((spot) => {
+    const r = spot.getBoundingClientRect();
+    spotLayout.push({
+      x: r.left + r.width / 2 - fieldRect.left,
+      y: r.top + r.height / 2 - fieldRect.top,
+      row: Number(spot.dataset.row),
+    });
+  });
+}
+
+function refreshLayout() {
+  resizeCanvas();
+  computeLayout();
+}
+refreshLayout();
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(refreshLayout, 150);
+});
+
+// ---------- Car engine ----------
+// Each car has a path of waypoints and moves toward the next one at a
+// constant speed (px/sec), fully re-computed every animation frame.
+let cars = [];
+
+function makeCar(path, opts = {}) {
+  return {
+    path,
+    seg: 0,
+    x: path[0].x,
+    y: path[0].y,
+    speed: opts.speed || 90,
+    color: opts.color || CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
+    dir: 'h', // 'h' or 'v', used to orient the drawn rectangle
+    dead: false,
+  };
+}
+
+function updateCars(dtSeconds) {
+  cars.forEach((car) => {
+    const target = car.path[car.seg];
+    if (!target) { car.dead = true; return; }
+    const dx = target.x - car.x;
+    const dy = target.y - car.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 0.5) {
+      car.dir = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+    }
+
+    const step = car.speed * dtSeconds;
+    if (step >= dist) {
+      car.x = target.x;
+      car.y = target.y;
+      car.seg++;
+      if (car.seg >= car.path.length) car.dead = true;
+    } else {
+      car.x += (dx / dist) * step;
+      car.y += (dy / dist) * step;
+    }
+  });
+  cars = cars.filter((c) => !c.dead);
+}
+
+function drawCars() {
+  ctx.clearRect(0, 0, canvasCssWidth, canvasCssHeight);
+  cars.forEach((car) => {
+    const w = car.dir === 'h' ? 15 : 8;
+    const h = car.dir === 'h' ? 8 : 15;
+    ctx.fillStyle = car.color;
+    ctx.shadowColor = car.color;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.roundRect(car.x - w / 2, car.y - h / 2, w, h, 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+}
+
+let lastTs = null;
+function tick(ts) {
+  if (lastTs === null) lastTs = ts;
+  const dt = Math.min((ts - lastTs) / 1000, 0.1); // clamp to avoid big jumps on tab-away
+  lastTs = ts;
+  updateCars(dt);
+  drawCars();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ---------- Ambient through-traffic: cars driving the length of an aisle ----------
+function spawnAmbientCar() {
+  if (aisleYs.length === 0) return;
+  const rowIndex = Math.floor(Math.random() * aisleYs.length);
+  const y = aisleYs[rowIndex];
+  const goingRight = Math.random() < 0.5;
+  const margin = 20;
+  const startX = goingRight ? -margin : canvasCssWidth + margin;
+  const endX = goingRight ? canvasCssWidth + margin : -margin;
+
+  const path = [{ x: startX, y }, { x: endX, y }];
+  cars.push(makeCar(path, { speed: 70 + Math.random() * 50 }));
+}
+setInterval(spawnAmbientCar, AMBIENT_SPAWN_MS);
+
+// ---------- Parking-event traffic: a car actually drives into/out of a stall ----------
+function spawnParkingCar(spotIndex, direction) {
+  const spot = spotLayout[spotIndex];
+  if (!spot) return;
+  const aisleY = aisleYs[spot.row];
+  const fromLeft = Math.random() < 0.5;
+  const edgeX = fromLeft ? -20 : canvasCssWidth + 20;
+
+  let path;
+  if (direction === 'enter') {
+    // Drive in along the aisle, then turn straight into the stall
+    path = [
+      { x: edgeX, y: aisleY },
+      { x: spot.x, y: aisleY },
+      { x: spot.x, y: spot.y },
+    ];
+  } else {
+    // Pull out of the stall into the aisle, then drive off
+    path = [
+      { x: spot.x, y: spot.y },
+      { x: spot.x, y: aisleY },
+      { x: edgeX, y: aisleY },
+    ];
+  }
+  cars.push(makeCar(path, { speed: 110 }));
+}
+
+// ---------- Occupancy simulation (unchanged logic, now drives spawnParkingCar) ----------
 function vacantCountsByRow() {
   const counts = new Array(ROW_COUNTS.length).fill(0);
   spots.forEach((s) => {
@@ -84,78 +230,11 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 4000);
 }
 
-// Drives a small car from the aisle straight into a stall (direction 'enter'),
-// or from a stall out into the aisle (direction 'leave'). Real positional
-// movement over two steps so it reads as driving, not a fade/blink.
-function travelCar(spot, direction) {
-  const rowIndex = Number(spot.dataset.row);
-  const aisle = aisleByRow[rowIndex];
-  const aisleRect = aisle.getBoundingClientRect();
-  const spotRect = spot.getBoundingClientRect();
-
-  const spotX = spotRect.left + spotRect.width / 2;
-  const spotY = spotRect.top + spotRect.height / 2;
-  const aisleY = aisleRect.top + aisleRect.height / 2;
-  // Point in the aisle directly below/above the stall's column
-  const alignedX = spotX;
-  // A point further down the aisle, so the car visibly drives along
-  // the lane before turning into the stall, rather than teleporting in
-  const approachX = spotX + (Math.random() < 0.5 ? -1 : 1) * (40 + Math.random() * 40);
-
-  const car = document.createElement('div');
-  car.className = 'traveling-car';
-  document.body.appendChild(car);
-
-  if (direction === 'enter') {
-    // Start out in the aisle, a little ways down from the stall
-    car.style.transition = 'none';
-    car.style.left = `${approachX}px`;
-    car.style.top = `${aisleY}px`;
-    car.style.opacity = '1';
-    void car.offsetWidth; // force the browser to register the start position
-
-    // Leg 1: drive along the aisle to line up with the stall's column
-    car.style.transition = 'left 0.45s ease-in-out';
-    car.style.left = `${alignedX}px`;
-
-    setTimeout(() => {
-      // Leg 2: pull straight into the stall
-      car.style.transition = 'top 0.45s ease-in-out, opacity 0.25s ease 0.3s';
-      car.style.top = `${spotY}px`;
-      car.style.opacity = '0';
-    }, 460);
-
-    setTimeout(() => car.remove(), 950);
-  } else {
-    // Start parked in the stall
-    car.style.transition = 'none';
-    car.style.left = `${spotX}px`;
-    car.style.top = `${spotY}px`;
-    car.style.opacity = '0';
-    void car.offsetWidth;
-
-    // Leg 1: pull out of the stall into the aisle, fading in as it goes
-    car.style.transition = 'top 0.4s ease-in-out, opacity 0.25s ease';
-    car.style.top = `${aisleY}px`;
-    car.style.opacity = '1';
-
-    setTimeout(() => {
-      // Leg 2: drive off down the aisle
-      car.style.transition = 'left 0.5s ease-in-out, opacity 0.3s ease 0.25s';
-      car.style.left = `${approachX}px`;
-      car.style.opacity = '0';
-    }, 410);
-
-    setTimeout(() => car.remove(), 950);
-  }
-}
-
 function updateStats() {
   const occupied = spots.filter((s) => s.classList.contains('occupied')).length;
   const total = spots.length;
-  const vacant = total - occupied;
   occupiedCountEl.textContent = occupied;
-  vacantCountEl.textContent = vacant;
+  vacantCountEl.textContent = total - occupied;
   utilPctEl.textContent = `${Math.round((occupied / total) * 100)}%`;
 }
 
@@ -164,13 +243,14 @@ function randomFlip() {
     Math.random() * (FLIPS_PER_TICK[1] - FLIPS_PER_TICK[0] + 1) + FLIPS_PER_TICK[0]
   );
   for (let i = 0; i < flips; i++) {
-    const spot = spots[Math.floor(Math.random() * spots.length)];
+    const idx = Math.floor(Math.random() * spots.length);
+    const spot = spots[idx];
     spot.classList.toggle('occupied');
     spot.classList.add('flash');
     setTimeout(() => spot.classList.remove('flash'), 600);
 
     const nowOccupied = spot.classList.contains('occupied');
-    travelCar(spot, nowOccupied ? 'enter' : 'leave');
+    spawnParkingCar(idx, nowOccupied ? 'enter' : 'leave');
   }
   updateStats();
 
